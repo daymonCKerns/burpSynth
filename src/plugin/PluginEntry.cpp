@@ -7,16 +7,16 @@
 
 using namespace Steinberg;
 
-BEGIN_FACTORY_DEF("BurpSynth", "", "")
+BEGIN_FACTORY_DEF("Thinker Plugins", "", "")
 
-    // Registered as an audio effect so DAWs route audio into it for the
-    // pass-through. Switch to Vst::PlugType::kInstrument once it synthesizes.
+    // kVstAudioEffectClass is the class type for every VST3 audio processor;
+    // the subcategory is what makes DAWs list it as an instrument.
     DEF_CLASS2(INLINE_UID_FROM_FUID(burp::kProcessorUID),
                PClassInfo::kManyInstances,
                kVstAudioEffectClass,
                "BurpSynth",
                Vst::kDistributable,
-               Vst::PlugType::kFx,
+               Vst::PlugType::kInstrumentSynth,
                "0.0.0",
                kVstVersionString,
                burp::PluginProcessor::createInstance)

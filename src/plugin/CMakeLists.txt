@@ -57,12 +57,20 @@ set_target_properties(BurpSynth PROPERTIES
 # linger, and so a DAW that has the old plugin loaded keeps its file intact
 # instead of having it overwritten underneath it. ditto is macOS's
 # bundle-aware copy and keeps the signature valid.
+#
+# Quarantine: macOS sometimes tags the built bundle with com.apple.quarantine.
+# On an unnotarized plugin that makes Gatekeeper block it in the DAW ("Apple
+# could not verify ... is free of malware"). ditto --noqtn skips copying the
+# tag, and the xattr step removes any tag on either copy. It runs through sh so
+# a bundle without the tag (xattr then exits non-zero) doesn't fail the build.
 get_target_property(BURPSYNTH_BUNDLE_PATH BurpSynth SMTG_PLUGIN_PACKAGE_PATH)
 set(BURPSYNTH_INSTALLED_PATH "${BURPSYNTH_VST3_INSTALL_DIR}/BurpSynth.vst3")
 add_custom_target(BurpSynth_deploy ALL
     COMMAND codesign --force --sign - "${BURPSYNTH_BUNDLE_PATH}"
     COMMAND ${CMAKE_COMMAND} -E rm -rf "${BURPSYNTH_INSTALLED_PATH}"
-    COMMAND ditto "${BURPSYNTH_BUNDLE_PATH}" "${BURPSYNTH_INSTALLED_PATH}"
+    COMMAND ditto --noqtn "${BURPSYNTH_BUNDLE_PATH}" "${BURPSYNTH_INSTALLED_PATH}"
+    COMMAND /bin/sh -c "xattr -dr com.apple.quarantine \"$0\" \"$1\" 2>/dev/null; true"
+            "${BURPSYNTH_BUNDLE_PATH}" "${BURPSYNTH_INSTALLED_PATH}"
     COMMENT "Signing BurpSynth.vst3 and copying it to ${BURPSYNTH_VST3_INSTALL_DIR}"
     VERBATIM
 )

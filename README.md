@@ -52,9 +52,9 @@ After rebuilding, rescan plugins in the DAW (or restart it if BurpSynth was
 already loaded).
 
 ## Trying it
-BurpSynth currently passes audio straight through and its window shows
-"hello world". It registers as an audio effect, so in a DAW rescan plugins,
-then add BurpSynth as an effect on an audio track and open its editor.
+BurpSynth is currently a test instrument: it plays a sine wave at the pitch of
+incoming MIDI notes (one note at a time), and its window shows "hello world".
+In a DAW rescan plugins, add BurpSynth to a MIDI track, and play notes.
 
 ## Build options
 | Option | Default | Effect |

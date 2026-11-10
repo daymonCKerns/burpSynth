@@ -2,6 +2,8 @@
 
 #include "pluginterfaces/base/funknown.h"
 
+// DO NOT EDIT EVER EVER EVER
+
 namespace burp {
 
 // Unique IDs DAWs use to find these classes. They are saved inside DAW

@@ -1,5 +1,6 @@
 VST Standard
     https://steinbergmedia.github.io/vst3_doc/vstsdk/index.html 
+    https://steinbergmedia.github.io/vst3_dev_portal/pages/index.html
 
 Belching Science
     https://atlasofscience.org/belching-how-does-it-work/
@@ -7,5 +8,5 @@ Belching Science
 
 Physical Modeling
     https://ccrma.stanford.edu/~jos/pasp/
-    
+
 
