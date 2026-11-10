@@ -1,0 +1,41 @@
+# Build output
+build/
+out/
+cmake-build-*/
+CMakeUserPresets.json
+compile_commands.json
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Xcode
+xcuserdata/
+*.xcuserstate
+DerivedData/
+
+# Editors and tooling
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+.cache/
+*.swp
+
+# Claude Code local settings (AGENTS.md stays tracked)
+.claude/settings.local.json
+
+# Compiled artifacts
+*.o
+*.a
+*.dylib
+*.app/
+*.vst3/
+*.component/
+*.clap/
+
+# Rendered audio
+*.wav
+!assets/**/*.wav

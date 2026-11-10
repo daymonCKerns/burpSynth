@@ -1,0 +1,11 @@
+VST Standard
+    https://steinbergmedia.github.io/vst3_doc/vstsdk/index.html 
+
+Belching Science
+    https://atlasofscience.org/belching-how-does-it-work/
+    https://pubs.aip.org/asa/jasa/article/146/4_Supplement/3010/703798/Acoustic-characteristics-of-belching-in-speech?__cf_chl_tk=Lk5WXC9OcRKY5i9kvnk0au_RiNKdvcdePOC9v6p3GoE-1794340152-1.0.1.1-HlDdabjMEMTLUtzFehLFCfsn2KejZxMSEny4SZvlpi8
+
+Physical Modeling
+    https://ccrma.stanford.edu/~jos/pasp/
+    
+

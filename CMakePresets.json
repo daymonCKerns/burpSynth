@@ -1,0 +1,70 @@
+{
+  "$comment": [
+    "CMake presets: named configure/build settings so nobody has to remember",
+    "long command lines. Usage: `cmake --preset debug`, then",
+    "`cmake --build --preset debug`. VS Code CMake Tools and CLion read this",
+    "file and list the presets in a dropdown.",
+    "This file is optional. Without it, the equivalent command is",
+    "`cmake -S . -B build/debug -DCMAKE_BUILD_TYPE=Debug`.",
+    "Schema version 10 (CMake 3.31+) is needed for these $comment fields."
+  ],
+  "version": 10,
+  "cmakeMinimumRequired": { "major": 3, "minor": 31, "patch": 0 },
+  "configurePresets": [
+    {
+      "$comment": "Day-to-day development: no optimization, debug symbols, asserts enabled.",
+      "name": "debug",
+      "displayName": "Debug",
+      "binaryDir": "${sourceDir}/build/debug",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
+    },
+    {
+      "$comment": [
+        "Optimized (-O3), asserts off. Use this to judge real-time CPU cost of",
+        "the physics model; Debug builds can run many times slower and give",
+        "misleading performance numbers."
+      ],
+      "name": "release",
+      "displayName": "Release",
+      "binaryDir": "${sourceDir}/build/release",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+    },
+    {
+      "$comment": [
+        "Release build containing both Apple Silicon and Intel code in one",
+        "binary. Only needed when distributing the plugin to others."
+      ],
+      "name": "release-universal",
+      "displayName": "Release (arm64 + x86_64)",
+      "inherits": "release",
+      "binaryDir": "${sourceDir}/build/release-universal",
+      "cacheVariables": { "CMAKE_OSX_ARCHITECTURES": "arm64;x86_64" }
+    },
+    {
+      "$comment": [
+        "Generates an Xcode project instead of Makefiles, for Xcode's debugger",
+        "and the Instruments profiler. Xcode picks Debug/Release itself, so no",
+        "CMAKE_BUILD_TYPE is set here."
+      ],
+      "name": "xcode",
+      "displayName": "Xcode project",
+      "generator": "Xcode",
+      "binaryDir": "${sourceDir}/build/xcode"
+    }
+  ],
+  "buildPresets": [
+    {
+      "$comment": "Each build preset points at a configure preset so `cmake --build --preset <name>` knows which build folder to use.",
+      "name": "debug",
+      "configurePreset": "debug"
+    },
+    { "name": "release", "configurePreset": "release" },
+    { "name": "release-universal", "configurePreset": "release-universal" },
+    {
+      "$comment": "Xcode projects hold every configuration, so the build preset picks one.",
+      "name": "xcode-debug",
+      "configurePreset": "xcode",
+      "configuration": "Debug"
+    }
+  ]
+}
