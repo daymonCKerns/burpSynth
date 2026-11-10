@@ -24,8 +24,8 @@ DerivedData/
 .cache/
 *.swp
 
-# Claude Code local settings (AGENTS.md stays tracked)
-.claude/settings.local.json
+# Claude Code local settings 
+.claude
 
 # Compiled artifacts
 *.o
