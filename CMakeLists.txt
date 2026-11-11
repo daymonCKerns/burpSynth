@@ -1,5 +1,5 @@
 # Top-level build description. CMake always starts here, then pulls in the
-# VST3 SDK and each module's own CMakeLists.txt via add_subdirectory().
+# VST3 SDK, Eigen and each module's own CMakeLists.txt via add_subdirectory().
 
 cmake_minimum_required(VERSION 3.25)
 
@@ -7,7 +7,9 @@ cmake_minimum_required(VERSION 3.25)
 # effect, and before the VST3 SDK is added so it builds for the same target.
 set(CMAKE_OSX_DEPLOYMENT_TARGET "13.0" CACHE STRING "Minimum macOS version")
 
-# OBJCXX (Objective-C++) is for the macOS editor view in src/gui.
+# OBJCXX (Objective-C++) is for VSTGUI's macOS backend, which the editor in
+# src/gui uses. CMake wants a language enabled in the highest directory common
+# to every target that uses it, so it is enabled here, not only inside the SDK.
 project(BurpSynth VERSION 0.0.0 LANGUAGES C CXX OBJCXX)
 
 # Default to a Debug build when no build type is given on the command line.
@@ -39,6 +41,11 @@ set(BURPSYNTH_BUNDLE_ID "com.burpsynth.vst3" CACHE STRING "macOS bundle identifi
 set(BURPSYNTH_VST3_INSTALL_DIR "/Library/Audio/Plug-Ins/VST3" CACHE PATH
     "Folder each build copies BurpSynth.vst3 into")
 
+# Builds the unit tests in tests/ (run with ctest) and the command-line tools
+# in tools/ (render_wav). They need only the model and engine, not a DAW.
+# Turn OFF to build just the plugin.
+option(BURPSYNTH_BUILD_TESTS "Build the unit tests and command-line tools" ON)
+
 # --- VST3 SDK ---------------------------------------------------------------
 # Lives in libs/vst3sdk as a git submodule (see README for the command).
 set(vst3sdk_SOURCE_DIR "${PROJECT_SOURCE_DIR}/libs/vst3sdk")
@@ -55,8 +62,19 @@ endif()
 set(SMTG_ENABLE_VST3_PLUGIN_EXAMPLES OFF CACHE BOOL "Build VST3 SDK example plugins")
 set(SMTG_ENABLE_VST3_HOSTING_EXAMPLES OFF CACHE BOOL "Build VST3 SDK example hosts")
 
-# VSTGUI is the SDK's bundled GUI library. Off until the GUI library is chosen.
-set(SMTG_ENABLE_VSTGUI_SUPPORT OFF CACHE BOOL "Build VSTGUI")
+# VSTGUI is the SDK's bundled GUI library; the editor in src/gui is built with
+# it. When this is ON the SDK adds libs/vst3sdk/vstgui4 itself and defines the
+# vstgui_support target that src/gui links. FORCE because the plugin cannot
+# build without it: it also replaces an OFF left in the cache of a build
+# folder configured before the editor existed, and it means
+# -DSMTG_ENABLE_VSTGUI_SUPPORT=OFF has no effect.
+set(SMTG_ENABLE_VSTGUI_SUPPORT ON CACHE BOOL "Build VSTGUI (required by the editor)" FORCE)
+
+# VSTGUI is a submodule of the SDK. Without it the SDK's own error is unclear.
+if(NOT EXISTS "${vst3sdk_SOURCE_DIR}/vstgui4/vstgui/CMakeLists.txt")
+    message(FATAL_ERROR
+        "VSTGUI not found in libs/vst3sdk/vstgui4. Run: git submodule update --init --recursive")
+endif()
 
 # After each build the SDK can run its validator (a VST3 conformance test
 # suite) and generate moduleinfo.json (class metadata DAWs read without
@@ -75,6 +93,25 @@ add_subdirectory(${vst3sdk_SOURCE_DIR} ${PROJECT_BINARY_DIR}/vst3sdk)
 # Defines the smtg_* CMake functions used in src/plugin/CMakeLists.txt.
 smtg_enable_vst3_sdk()
 
+# --- Eigen ------------------------------------------------------------------
+# Header-only linear algebra library, used for the tube state arrays in
+# src/model. Lives in libs/eigen as a git submodule (see README).
+set(eigen_SOURCE_DIR "${PROJECT_SOURCE_DIR}/libs/eigen")
+if(NOT EXISTS "${eigen_SOURCE_DIR}/Eigen/Core")
+    message(FATAL_ERROR
+        "Eigen not found in libs/eigen. To add it: "
+        "git submodule add https://gitlab.com/libeigen/eigen.git libs/eigen "
+        "(after a fresh clone: git submodule update --init --recursive)")
+endif()
+
+# Header-only, so an INTERFACE target: linking it only adds the include path
+# to whatever links it.
+add_library(burp_eigen INTERFACE)
+
+# SYSTEM: the compiler treats Eigen as a system header and hides its warnings,
+# so our -Wall -Wextra -Wshadow ... flags only report on our own code.
+target_include_directories(burp_eigen SYSTEM INTERFACE "${eigen_SOURCE_DIR}")
+
 # --- BurpSynth --------------------------------------------------------------
 # Shared compiler settings. Every BurpSynth target links this privately so
 # they all compile with the same language version and warnings.
@@ -87,6 +124,11 @@ target_compile_options(burpsynth_options INTERFACE
     -Wshadow
     # Flags float math silently promoted to double, a common DSP slowdown.
     -Wdouble-promotion
+    # With the Xcode generator the SDK turns on -ffast-math for every target.
+    # Fast math lets the compiler assume no value is ever NaN or infinite,
+    # which would remove the engine's check that resets a blown-up simulation.
+    # This comes later on the command line, so it wins for BurpSynth's code.
+    -fno-fast-math
 )
 
 # Host-agnostic code: no VST3 SDK dependency, so it can be unit tested alone.
@@ -96,3 +138,11 @@ add_subdirectory(src/audio_engine)
 # Plugin editor, then the VST3 SDK glue: the only code that talks to the DAW.
 add_subdirectory(src/gui)
 add_subdirectory(src/plugin)
+
+# Unit tests and command-line tools. enable_testing() has to be called in this
+# top-level file so `ctest --test-dir build/<preset>` finds the tests.
+if(BURPSYNTH_BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+    add_subdirectory(tools)
+endif()

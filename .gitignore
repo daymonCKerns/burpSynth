@@ -24,9 +24,6 @@ DerivedData/
 .cache/
 *.swp
 
-# Claude Code local settings 
-.claude/
-
 # Compiled artifacts
 *.o
 *.a

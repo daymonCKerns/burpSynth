@@ -9,4 +9,7 @@ Belching Science
 Physical Modeling
     https://ccrma.stanford.edu/~jos/pasp/
 
+Chimera (similar open source software)
+    https://github.com/jamesondh/chimera-vocal-synth/blob/main/docs/architecture.md
+
 

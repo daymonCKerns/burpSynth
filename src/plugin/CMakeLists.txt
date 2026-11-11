@@ -14,9 +14,15 @@ smtg_add_vst3plugin(BurpSynth
 # Lets plugin files write #include "plugin/PluginIds.h".
 target_include_directories(BurpSynth PRIVATE ${PROJECT_SOURCE_DIR}/src)
 
+# SYSTEM: hides warnings that come from the SDK's own headers, so the build
+# output only reports on our code. The folder also arrives through the sdk
+# target below; listing it here as SYSTEM switches it from -I to -isystem.
+target_include_directories(BurpSynth SYSTEM PRIVATE ${vst3sdk_SOURCE_DIR})
+
 # sdk: the SDK's base classes (AudioEffect, EditController) and plugin factory.
 # burp_engine brings burp_model with it (see audio_engine/CMakeLists.txt).
-# burp_gui: the editor view the controller hands to the DAW.
+# burp_gui: the editor view the controller hands to the DAW (it brings VSTGUI
+# with it, see src/gui/CMakeLists.txt).
 target_link_libraries(BurpSynth PRIVATE
     sdk
     burp_engine
