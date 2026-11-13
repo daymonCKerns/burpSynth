@@ -1,0 +1,9 @@
+# Check: the tract slew limit also covers the lips. Lips jumped shut and open
+# during the sustain; should stay clean and still close and open audibly.
+0.0  note_on 45 0.8
+1.0  set LipOpening 0
+1.5  set LipOpening 5
+2.0  set LipOpening 0.3
+2.5  set LipOpening 2.5
+3.0  note_off 45
+4.5  end

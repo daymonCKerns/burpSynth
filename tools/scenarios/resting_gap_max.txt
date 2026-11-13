@@ -1,0 +1,6 @@
+# Issue: a larger UES Resting Gap makes the release pop louder and shimmery.
+# Gap at its maximum, short press. Compare with resting_gap_min.
+0.0   set UesRestingGap 0.2
+0.0   note_on 45 0.8
+0.15  note_off 45
+1.5   end

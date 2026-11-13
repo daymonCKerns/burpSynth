@@ -5,12 +5,15 @@
 //   defaults: burp.wav, note 45, velocity 0.8, hold 1.0
 //
 // Renders at 48 kHz in 512-frame blocks: note on, hold, note off, then one
-// more second for the tail. Prints the peak level and the file path.
+// more second for the tail. Prints how much of one CPU core the render took,
+// the peak level and the file path. Only a release build gives a meaningful
+// CPU figure.
 
 #include "WavWriter.h"
 #include "audio_engine/Engine.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -49,10 +52,18 @@ int main(int argc, char** argv)
         }
     };
 
+    const auto started = std::chrono::steady_clock::now();
     engine.noteOn(key, static_cast<double>(key), velocity);
     renderFor(holdSeconds);
     engine.noteOff(key);
     renderFor(kTailSeconds);
+    const double elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
+
+    // A plugin has to render each block before it plays, on one thread: this
+    // is how much of one core the render took, and it must stay well below 100%.
+    const double audioSeconds = static_cast<double>(recording.size()) / kSampleRate;
+    std::printf("rendered %.2f s of audio in %.3f s: %.1f%% of one core\n", audioSeconds, elapsed,
+                100.0 * elapsed / audioSeconds);
 
     float peak = 0.0f;
     for (const float sample : recording) {

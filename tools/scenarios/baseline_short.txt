@@ -1,0 +1,4 @@
+# Baseline: a short press at defaults, for the release pop.
+0.0   note_on 45 0.8
+0.15  note_off 45
+1.5   end

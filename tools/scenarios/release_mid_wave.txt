@@ -1,0 +1,6 @@
+# Regression: release while the Belch 3 wave is running (about 0.3 to 1.1 s
+# into a note). The wave used to vanish at note-off, which rang the tract
+# like a struck bell (+14 dB at defaults). Defaults, released at 0.5 s.
+0.0  note_on 45 0.8
+0.5  note_off 45
+1.5  end

@@ -50,6 +50,8 @@ BurpControls makeControls(const ParamValues& plainValues)
     controls.reflex.releaseTime = msToS(get(ParamId::ReleaseTime));
     controls.reflex.speed = get(ParamId::ReflexSpeed);
     controls.reflex.peristalsisStrength = get(ParamId::PeristalsisStrength);
+    controls.reflex.burstTime = msToS(get(ParamId::BurstLength));
+    controls.reflex.sustainStrength = get(ParamId::SustainStrength);
     controls.uesMassScale = get(ParamId::UesMass);
     controls.uesDampingRatio = get(ParamId::UesDamping);
     controls.uesRestArea = cm2ToM2(get(ParamId::UesRestingGap));

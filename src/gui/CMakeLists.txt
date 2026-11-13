@@ -3,6 +3,8 @@
 # HelloWorldView.h/.mm are the old AppKit placeholder and are no longer built.
 add_library(burp_gui STATIC
     Editor.cpp
+    # The body cross-section: live parameters as shapes, gas moving through.
+    BodyView.cpp
 )
 
 # Lets any code that links burp_gui write #include "gui/Editor.h".

@@ -1,0 +1,4 @@
+# Baseline: a held note at defaults. Compare the issue scenarios against this.
+0.0  note_on 45 0.8
+3.0  note_off 45
+4.5  end

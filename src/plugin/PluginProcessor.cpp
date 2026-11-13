@@ -75,6 +75,7 @@ PluginProcessor::PluginProcessor()
     for (std::size_t i = 0; i < table.size(); ++i) {
         normalized_[i].store(toNormalized(table[i], table[i].defaultValue), std::memory_order_relaxed);
     }
+    sentMeters_.fill(-1.0);
 }
 
 tresult PLUGIN_API PluginProcessor::initialize(FUnknown* context)
@@ -157,6 +158,7 @@ tresult PLUGIN_API PluginProcessor::process(Vst::ProcessData& data)
     }
     if (canRender) {
         renderFrames(*output, rendered, numSamples - rendered);
+        sendMeters(data.outputParameterChanges);
     }
 
     if (output != nullptr) {
@@ -280,6 +282,28 @@ void PluginProcessor::renderFrames(Vst::AudioBusBuffers& output, int32 start, in
             channels[static_cast<std::size_t>(channel)] += chunk;
         }
         frames -= chunk;
+    }
+}
+
+// One point at offset 0 per meter that changed. The host passes output
+// parameters on to the controller, where the editor reads them.
+void PluginProcessor::sendMeters(Vst::IParameterChanges* changes)
+{
+    const MeterValues values = engine_.takeMeters();
+    if (changes == nullptr) {
+        return;
+    }
+    for (std::size_t i = 0; i < values.size(); ++i) {
+        if (values[i] == sentMeters_[i]) {
+            continue;
+        }
+        int32 queueIndex = 0;
+        Vst::IParamValueQueue* queue =
+            changes->addParameterData(static_cast<Vst::ParamID>(kMeters[i].id), queueIndex);
+        int32 pointIndex = 0;
+        if (queue != nullptr && queue->addPoint(0, values[i], pointIndex) == kResultOk) {
+            sentMeters_[i] = values[i];
+        }
     }
 }
 

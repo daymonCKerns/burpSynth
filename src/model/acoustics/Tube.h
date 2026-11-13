@@ -11,7 +11,10 @@
 //                R_i = viscous resistance of the two half-cells
 //   wall i:      m y'' + r y' + k y = P_i,  wallFlow_i = scale * S_i * y'
 //                S_i = 2 sqrt(pi A_i) dx
-//                m = 15 kg/m^2, r = 16000 Pa s/m, k = 3e6 Pa/m (per unit wall area)
+//                m = 15 kg/m^2, r = 16000 Pa s/m, k = stiffness * 3e6 Pa/m
+//                (per unit wall area)
+// The wall is what makes a tube soft or collapsible: it runs every sample as
+// part of the acoustics, so it cannot fall behind the pressure it responds to.
 //
 // The state lives in Eigen arrays, so each update is one whole-array
 // expression. Arrays are allocated once in prepare() for the largest cell
@@ -48,9 +51,22 @@ public:
     // Wall yielding scale: 0 = rigid, 1 = nominal soft tissue.
     void setWallScale(double scale);
 
+    // Wall stiffness scale: 1 = nominal soft tissue (3e6 Pa/m); smaller is a
+    // floppier wall that gives way more under pressure.
+    void setWallStiffness(double scale);
+
     // Control rate: areas move in a straight line to `shape` over rampSamples
     // audio samples. Areas are floored at a small positive value.
     void setTargetShape(const AreaFunction& shape, int rampSamples);
+
+    // Caps how fast setTargetShape moves each area:
+    //   |dA/dt| <= max(relativeRate A, floorRate)
+    // relativeRate in 1/s, floorRate in m^2/s (so a nearly shut section can
+    // still open). A target further away is reached over later calls. Every
+    // area change squeezes or stretches the gas in the cell (the dx dA/dt
+    // term), so a fast change is a pressure pulse: a click. 0 = no limit (the
+    // default).
+    void setSlewLimit(double relativeRate, double floorRate);
 
     // Zeroes pressures, flows and wall motion; keeps the geometry.
     void reset();
@@ -98,6 +114,9 @@ private:
     double soundSpeed_ = speedOfSound(kAir, kBodyTemperature);
     double viscosity_ = kViscosity;
     double wallScale_ = 1.0;
+    double wallStiffness_ = 1.0;
+    double slewRelative_ = 0.0; // 1/s, 0 = no slew limit
+    double slewFloor_ = 0.0;    // m^2/s
 
     int rampRemaining_ = 0; // samples left in the area ramp
 

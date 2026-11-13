@@ -33,6 +33,13 @@ void Reservoir::fill(double gasVolume)
     solve();
 }
 
+void Reservoir::addGas(double gasVolume)
+{
+    // dn = P_atm dV / (R T)
+    moles_ += gasMoles(kAtmosphericPressure, gasVolume, kBodyTemperature);
+    solve();
+}
+
 void Reservoir::reset()
 {
     moles_ = 0.0;

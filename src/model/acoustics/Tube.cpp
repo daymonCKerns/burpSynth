@@ -66,6 +66,11 @@ void Tube::setWallScale(double scale)
     wallScale_ = scale;
 }
 
+void Tube::setWallStiffness(double scale)
+{
+    wallStiffness_ = scale;
+}
+
 void Tube::setTargetShape(const AreaFunction& shape, int rampSamples)
 {
     sampleTargets(shape);
@@ -78,9 +83,24 @@ void Tube::setTargetShape(const AreaFunction& shape, int rampSamples)
         return;
     }
 
+    // Slew limit: A_target <- A + clamp(A_target - A, +-max(relative A, floor) T),
+    // T = the ramp's duration.
+    if (slewRelative_ > 0.0) {
+        const double duration = static_cast<double>(rampSamples) / sampleRate_;
+        const auto area = area_.head(count_);
+        const auto limit = (slewRelative_ * area).max(slewFloor_) * duration;
+        areaTarget_.head(count_) = area + (areaTarget_.head(count_) - area).min(limit).max(-limit);
+    }
+
     areaStep_.head(count_) =
         (areaTarget_.head(count_) - area_.head(count_)) / static_cast<double>(rampSamples);
     rampRemaining_ = rampSamples;
+}
+
+void Tube::setSlewLimit(double relativeRate, double floorRate)
+{
+    slewRelative_ = relativeRate;
+    slewFloor_ = floorRate;
 }
 
 void Tube::reset()
@@ -112,7 +132,8 @@ void Tube::stepCells(double dt)
     // m y'' + r y' + k y = P per unit wall area (stepMassSpring, per cell)
     wallVelocity_.head(count_) =
         (wallVelocity_.head(count_)
-         + (dt / kWallMass) * (pressure_.head(count_) - kWallStiffness * wallPosition_.head(count_)))
+         + (dt / kWallMass)
+               * (pressure_.head(count_) - (wallStiffness_ * kWallStiffness) * wallPosition_.head(count_)))
         / (1.0 + dt * kWallDamping / kWallMass);
     wallPosition_.head(count_) += dt * wallVelocity_.head(count_);
 

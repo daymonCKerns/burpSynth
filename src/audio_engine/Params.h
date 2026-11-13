@@ -46,6 +46,8 @@ enum class ParamId : int {
     PitchSettle = 25,
     ReleaseTime = 26,
     AccentAmount = 27,
+    BurstLength = 28,
+    SustainStrength = 29,
 
     // Body: anatomy, applied when a burp starts.
     BodySize = 40,
@@ -55,7 +57,7 @@ enum class ParamId : int {
     PharynxWidth = 44,
 };
 
-inline constexpr int kParamCount = 30;
+inline constexpr int kParamCount = 32;
 
 struct ParamInfo {
     ParamId id;

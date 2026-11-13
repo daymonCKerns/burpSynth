@@ -11,9 +11,14 @@
 //                blended smoothly in between
 //   tongue(s)  = 1 - 0.9 h exp(-((s - s_t) / 0.12)^2)
 //                s_t = lerp(0.3, 0.9, tonguePosition),  h = tongueHeight
-//   room(s)    = 1 + 0.6 h exp(-((s - s_o) / 0.15)^2)
-//                s_o = s_t + 0.4 if s_t < 0.6, else s_t - 0.45
-//                (the tongue's bulk leaves room at the other end of the tract)
+//   room(s)    = 1 + 0.6 h (w bump(s, s_t + 0.4) + (1 - w) bump(s, s_t - 0.45))
+//                bump(s, c) = exp(-((s - c) / 0.15)^2)
+//                w = smoothstep((0.6 - s_t) / 0.15)
+//                (the tongue's bulk leaves room at the other end of the tract:
+//                in front of a back tongue, behind a front one. Between
+//                tonguePosition 0.25 and 0.5 the room crossfades from one end
+//                to the other. It used to switch at 0.5, which moved the
+//                bulge across the tract in one control tick: a +14 dB pulse)
 //   area(s)    = max(neutral * pharynx * jaw * tongue * room, 0.05 cm^2)
 // The last mouth section is the lip opening itself, floored at kClosedArea.
 //

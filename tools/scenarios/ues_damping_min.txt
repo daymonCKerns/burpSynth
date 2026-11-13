@@ -1,0 +1,6 @@
+# Issue: low UES Damping makes the level shoot up and clip. Damping at its
+# minimum, held note. Compare with baseline_held (0.12).
+0.0  set UesDamping 0.02
+0.0  note_on 45 0.8
+3.0  note_off 45
+4.5  end

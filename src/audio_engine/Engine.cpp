@@ -38,6 +38,11 @@ void Engine::noteOn(int key, double semitones, double velocity)
     const bool wasEmpty = notes_.empty();
     notes_.push(key, semitones);
     if (wasEmpty) {
+        // trigger() applies the body and snaps the smoothers to the controls,
+        // so hand it the parameters set since the last render (e.g. earlier
+        // in this block). Otherwise it starts from the old values and the
+        // smoothers glide to the new ones during the burp's first 15 ms.
+        model_.setControls(makeControls(values_));
         model_.trigger(semitones, clampedVelocity);
     } else {
         model_.changeNote(semitones, clampedVelocity);
@@ -87,6 +92,30 @@ void Engine::render(float* const* outputs, int numChannels, int numFrames)
     }
 }
 
+const BurpModel& Engine::model() const
+{
+    return model_;
+}
+
+// Each value clamped to 0..1, in kMeters order (Meters.h).
+MeterValues Engine::takeMeters()
+{
+    const auto unit = [](double value) { return std::clamp(value, 0.0, 1.0); };
+    const ReflexOutput& reflex = model_.reflexOutput();
+    const MeterValues values {
+        unit(model_.stomachVolume() / kFullStomach),
+        unit(reflex.lesOpen),
+        unit(reflex.uesOpen),
+        unit(model_.lesFlowAverage() / kFullFlow),
+        unit(model_.uesFlowAverage() / kFullFlow),
+        unit(reflex.waveCentre),
+        unit(reflex.waveDepth),
+        unit(peak_),
+    };
+    peak_ = 0.0;
+    return values;
+}
+
 void Engine::renderChunk(float* const* outputs, int numChannels, int offset, int numFrames,
                          double gain)
 {
@@ -106,6 +135,7 @@ void Engine::renderChunk(float* const* outputs, int numChannels, int offset, int
     if (finite) {
         for (int i = 0; i < numFrames; ++i) {
             hostOut[i] = std::tanh(hostOut[i]);
+            peak_ = std::max(peak_, std::abs(hostOut[i]));
         }
     } else {
         model_.reset();

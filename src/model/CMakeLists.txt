@@ -1,7 +1,7 @@
 # Physics simulation of the stomach-to-mouth tract. Pure C++ with no VST3 SDK
 # dependency (Eigen is its only library) so it can be unit tested without the
 # SDK or a DAW. Headers-only parts (math/, Cell.h, Link.h, AreaFunction.h,
-# Peristalsis.h, TubeLaw.h) need no entry here.
+# Peristalsis.h) need no entry here.
 add_library(burp_model STATIC
     # Wires the parts together and runs the per-sample and control updates.
     BurpModel.cpp

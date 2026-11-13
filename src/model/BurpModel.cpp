@@ -9,7 +9,6 @@
 #include "model/geometry/AreaFunction.h"
 #include "model/geometry/Articulation.h"
 #include "model/geometry/Peristalsis.h"
-#include "model/geometry/TubeLaw.h"
 #include "model/math/Gas.h"
 #include "model/math/Smooth.h"
 #include "model/math/Units.h"
@@ -27,13 +26,16 @@ void BurpModel::prepare(double sampleRate)
     dt_ = 1.0 / sampleRate;
     controlInterval_ = std::max(1, static_cast<int>(std::lround(kControlPeriod * sampleRate)));
     controlDt_ = static_cast<double>(controlInterval_) * dt_;
-    tailSamples_ = static_cast<int>(std::lround(kTailTime * sampleRate));
+    tailSamples_ = static_cast<int>(std::lround(kMaxTailTime * sampleRate));
+    quietLimit_ = std::max(1, static_cast<int>(std::lround(kQuietTime * sampleRate)));
     fadeSamples_ = std::max(1, static_cast<int>(std::lround(kSafetyFade * sampleRate)));
 
     esophagus_.prepare(kMaxEsophagusLength * kMaxBodySize, sampleRate);
     pharynx_.prepare(kPharynxLength * kMaxBodySize, sampleRate);
     mouth_.prepare(kMouthLength * kMaxBodySize, sampleRate);
     nasal_.prepare(kNasalLength * kMaxBodySize, sampleRate);
+    pharynx_.setSlewLimit(kTractSlewRate, kTractSlewFloor);
+    mouth_.setSlewLimit(kTractSlewRate, kTractSlewFloor);
     ues_.prepare(sampleRate);
     pitch_.prepare(sampleRate);
 
@@ -54,6 +56,7 @@ void BurpModel::prepare(double sampleRate)
 
     averageCoefficient_ = onePoleCoefficient(kPressureAverageTime, controlDt_);
     accentCoefficient_ = onePoleCoefficient(kAccentDecay, controlDt_);
+    flowAverageCoefficient_ = onePoleCoefficient(kDisplayFlowTime, controlDt_);
 
     esophagusAverage_ = Eigen::ArrayXd::Zero(esophagus_.pressures().size());
 
@@ -69,6 +72,8 @@ void BurpModel::reset()
     accent_ = 0.0;
     snapSmoothers();
     idleSamples_ = 0;
+    quietSamples_ = 0;
+    fadeLeft_ = 0;
     tickPending_ = false;
     asleep_ = true;
 }
@@ -88,12 +93,16 @@ void BurpModel::trigger(double semitones, double velocity)
 
     accent_ = 0.0;
     stomach_.setExternalPressure(abdominalSmoother_.value());
-    stomach_.fill(controls_.gasVolume * lerp(0.3, 1.0, std::clamp(velocity, 0.0, 1.0)));
+    fullGas_ = controls_.gasVolume * lerp(0.3, 1.0, std::clamp(velocity, 0.0, 1.0));
+    stomach_.fill(fullGas_);
+    fullMoles_ = stomach_.moles();
     reflex_.setSettings(controls_.reflex);
     reflex_.trigger();
     pitch_.startNote(semitones);
 
     idleSamples_ = 0;
+    quietSamples_ = 0;
+    fadeLeft_ = 0;
     tickPending_ = true;
     asleep_ = false;
 }
@@ -128,20 +137,31 @@ void BurpModel::render(double* out, int numFrames)
             return;
         }
 
-        const double fade = std::clamp(
-            1.0 - static_cast<double>(idleSamples_ - tailSamples_) / static_cast<double>(fadeSamples_),
-            0.0, 1.0);
-        out[i] = fade * stepSample();
+        const double sample = stepSample();
+
+        // The tail ends when it has been quiet for kQuietTime, or after
+        // kMaxTailTime; then a kSafetyFade fade, and sleep.
+        const bool idle = reflex_.isIdle();
+        idleSamples_ = idle ? idleSamples_ + 1 : 0;
+        quietSamples_ = idle && std::abs(sample) < kQuietPressure ? quietSamples_ + 1 : 0;
+        if (fadeLeft_ == 0 && (quietSamples_ >= quietLimit_ || idleSamples_ >= tailSamples_)) {
+            fadeLeft_ = fadeSamples_;
+        }
+
+        if (fadeLeft_ == 0) {
+            out[i] = sample;
+        } else {
+            out[i] = sample * static_cast<double>(fadeLeft_) / static_cast<double>(fadeSamples_);
+            if (--fadeLeft_ == 0) {
+                resetAcoustics();
+                asleep_ = true;
+                continue;
+            }
+        }
 
         if (--samplesUntilTick_ == 0) {
             controlTick();
             samplesUntilTick_ = controlInterval_;
-        }
-
-        idleSamples_ = reflex_.isIdle() ? idleSamples_ + 1 : 0;
-        if (idleSamples_ >= tailSamples_ + fadeSamples_) {
-            resetAcoustics();
-            asleep_ = true;
         }
     }
 }
@@ -166,6 +186,56 @@ double BurpModel::targetHz() const
     return pitch_.targetHz();
 }
 
+double BurpModel::esophagusPressure() const
+{
+    return esophagus_.outletPressure();
+}
+
+double BurpModel::pharynxPressure() const
+{
+    return pharynx_.inletPressure();
+}
+
+double BurpModel::mouthPressure() const
+{
+    return mouth_.outletPressure();
+}
+
+const ReflexOutput& BurpModel::reflexOutput() const
+{
+    return reflex_.output();
+}
+
+double BurpModel::lesFlowAverage() const
+{
+    return lesFlowAverage_;
+}
+
+double BurpModel::uesFlowAverage() const
+{
+    return uesFlowAverage_;
+}
+
+double BurpModel::stomachVolume() const
+{
+    return stomach_.volume();
+}
+
+double BurpModel::lesFlow() const
+{
+    return les_.flow();
+}
+
+double BurpModel::uesFlow() const
+{
+    return ues_.flow();
+}
+
+double BurpModel::uesArea() const
+{
+    return ues_.minArea();
+}
+
 // Gas first: Tube::configure grids each tube with the current speed of sound.
 void BurpModel::applyBody()
 {
@@ -186,11 +256,9 @@ void BurpModel::applyBody()
 
     anatomy_.set(controls_.body);
 
-    AreaFunction esophagusRest = anatomy_.esophagusShape();
-    esophagusRest.scale(esophagusCollapsedFraction());
     const TractShapes tract = articulate(controls_.mouth);
 
-    esophagus_.configure(anatomy_.esophagusLength(), esophagusRest);
+    esophagus_.configure(anatomy_.esophagusLength(), anatomy_.esophagusShape());
     pharynx_.configure(anatomy_.pharynxLength(), tract.pharynx);
     mouth_.configure(anatomy_.mouthLength(), tract.mouth);
     nasal_.configure(anatomy_.nasalLength(), anatomy_.nasalShape());
@@ -212,6 +280,8 @@ void BurpModel::resetAcoustics()
     lips_.reset();
     nostrils_.reset();
     esophagusAverage_.setZero();
+    lesFlowAverage_ = 0.0;
+    uesFlowAverage_ = 0.0;
 }
 
 void BurpModel::snapSmoothers()
@@ -250,9 +320,17 @@ void BurpModel::controlTick()
     reflex_.setSettings(controls_.reflex);
     const ReflexOutput& belch = reflex_.tick(controlDt_, esophagusAverage_(cells - 1));
 
-    // 4. Stomach squeeze.
+    // 4. Stomach squeeze and stiffness. While sustained, the stomach is refilled
+    // toward the note's first fill so the flow stays steady (more than a
+    // stomach could hold; musical, not physical):
+    //   added gas per tick = fill (1 - n / n_full) dt / kRefillTime
+    // Never past the first fill, so holding a note cannot build up pressure.
     accent_ *= accentCoefficient_;
+    stomach_.setWallElastance(controls_.stomachElastance);
     stomach_.setExternalPressure(abdominal + accent_);
+    if (reflex_.isSustaining() && stomach_.moles() < fullMoles_) {
+        stomach_.addGas(fullGas_ * (1.0 - stomach_.moles() / fullMoles_) * controlDt_ / kRefillTime);
+    }
 
     // 5. Valve targets.
     les_.setTargetArea(belch.lesOpen * controls_.lesOpeningArea, controlInterval_);
@@ -267,32 +345,31 @@ void BurpModel::controlTick()
                        belch.uesOpen });
     ues_.setTurbulenceGain(controls_.breathiness);
 
-    // 7. Shapes: articulation for the upper tract; tube law and peristalsis
-    // for the esophagus, sampling the averaged pressure at the nearest cell.
+    // 7. Shapes: articulation for the upper tract, peristalsis for the
+    // esophagus. Shapes never depend on pressure here: a pressure-driven shape
+    // updated once per tick lags the pressure and pumps the gas (it did, at
+    // 500 Hz). The esophagus gives way to pressure through its wall instead.
     const TractShapes tract = articulate(mouthShape);
     pharynx_.setTargetShape(tract.pharynx, controlInterval_);
     mouth_.setTargetShape(tract.mouth, controlInterval_);
     lips_.setArea(mouthShape.lipArea);
     nostrils_.setArea(kNostrilArea);
 
-    const double collapsed = esophagusCollapsedFraction();
     AreaFunction esophagusTarget;
-    esophagusTarget.fill(kEsophagusSections, 0.0);
-    for (int i = 0; i < kEsophagusSections; ++i) {
-        const double x = (static_cast<double>(i) + 0.5) / static_cast<double>(kEsophagusSections);
-        const int cell = std::min(cells - 1, static_cast<int>(x * static_cast<double>(cells)));
-        const double wave = belch.waveCentre >= 0.0
-                                ? peristalsisFactor(x, belch.waveCentre, kPeristalsisWidth, belch.waveDepth)
-                                : 1.0;
-        esophagusTarget.area[static_cast<std::size_t>(i)]
-            = kEsophagusOpenArea
-              * tubeLawOpenFraction(esophagusAverage_(cell), kEsophagusOpeningPressure, collapsed) * wave;
+    esophagusTarget.fill(kEsophagusSections, kEsophagusOpenArea);
+    if (belch.waveCentre >= 0.0) {
+        for (int i = 0; i < kEsophagusSections; ++i) {
+            const double x = (static_cast<double>(i) + 0.5) / static_cast<double>(kEsophagusSections);
+            esophagusTarget.area[static_cast<std::size_t>(i)]
+                *= peristalsisFactor(x, belch.waveCentre, kPeristalsisWidth, belch.waveDepth);
+        }
     }
     esophagus_.setTargetShape(esophagusTarget, controlInterval_);
 
     // 8. Wall yielding and the connectors' neighbour inertances.
     const double wallScale = 2.0 * controls_.wallSoftness;
     esophagus_.setWallScale(wallScale);
+    esophagus_.setWallStiffness(esophagusWallStiffness());
     pharynx_.setWallScale(wallScale);
     mouth_.setWallScale(wallScale);
     nasal_.setWallScale(wallScale);
@@ -303,6 +380,10 @@ void BurpModel::controlTick()
     velum_.setNeighbourInertance(pharynx_.outletHalfInertance() + nasal_.inletHalfInertance());
     lips_.setNeighbourInertance(mouth_.outletHalfInertance());
     nostrils_.setNeighbourInertance(nasal_.outletHalfInertance());
+
+    // 9. Display averages of the valve flows: avg += (1 - a) (U - avg).
+    lesFlowAverage_ += (1.0 - flowAverageCoefficient_) * (les_.flow() - lesFlowAverage_);
+    uesFlowAverage_ += (1.0 - flowAverageCoefficient_) * (ues_.flow() - uesFlowAverage_);
 }
 
 // docs/implementation_plan.md, section 3.5.
@@ -345,10 +426,12 @@ double BurpModel::stepSample()
     return outputScale_ * (lips_.flowDerivative() + nostrils_.flowDerivative());
 }
 
-// Fraction of the open area left at zero pressure: 1 = rigid open pipe.
-double BurpModel::esophagusCollapsedFraction() const
+// Esophagus wall stiffness relative to nominal tissue, spread evenly in ratio:
+//   stiffness = kFloppiestEsophagusWall^(1 - Esophagus Stiffness)
+// 1 = nominal tissue, 0 = kFloppiestEsophagusWall (gives way 20x as much).
+double BurpModel::esophagusWallStiffness() const
 {
-    return lerp(0.1, 1.0, controls_.esophagusStiffness);
+    return std::pow(kFloppiestEsophagusWall, 1.0 - controls_.esophagusStiffness);
 }
 
 } // namespace burp

@@ -53,6 +53,8 @@ private:
     void handleEvent(const Steinberg::Vst::Event& event);
     void renderFrames(Steinberg::Vst::AudioBusBuffers& output, Steinberg::int32 start,
                       Steinberg::int32 frames);
+    // Engine::takeMeters as output parameters (Meters.h), for the editor.
+    void sendMeters(Steinberg::Vst::IParameterChanges* changes);
     NormalizedValues loadNormalized() const;
 
     Engine engine_;
@@ -63,6 +65,9 @@ private:
     // Current normalised values, for getState. Atomic because getState and
     // setState run on the UI thread while process() runs.
     std::array<std::atomic<double>, kParamCount> normalized_;
+
+    // Last meter values sent; only changes are sent. -1 = never sent.
+    std::array<double, kMeterCount> sentMeters_;
 
     // Set by setState; the next process() pushes every value to the engine,
     // so the engine is only ever touched from the audio thread while active.

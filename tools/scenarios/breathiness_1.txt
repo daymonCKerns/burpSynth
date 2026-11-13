@@ -1,0 +1,5 @@
+# Issue: Breathiness brings in a fire-alarm tone. Full breathiness, held note.
+0.0  set Breathiness 1
+0.0  note_on 45 0.8
+3.0  note_off 45
+4.5  end

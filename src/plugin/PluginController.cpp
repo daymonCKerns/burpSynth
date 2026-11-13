@@ -1,6 +1,7 @@
 #include "plugin/PluginController.h"
 #include "plugin/PluginProcessor.h"
 
+#include "audio_engine/Meters.h"
 #include "audio_engine/Params.h"
 #include "gui/Editor.h"
 
@@ -34,6 +35,16 @@ tresult PLUGIN_API PluginController::initialize(FUnknown* context)
                                                         row.defaultValue,
                                                         Vst::kStepCountContinuous,
                                                         Vst::ParameterInfo::kCanAutomate));
+    }
+
+    // Meters (audio_engine/Meters.h): read-only and hidden, so hosts neither
+    // automate nor list them. The processor sends them as output parameters,
+    // the host hands them to setParamNormalized, and the editor reads them.
+    for (const MeterInfo& meter : kMeters) {
+        const UString128 title(meter.name);
+        parameters.addParameter(title, nullptr, 0, 0.0,
+                                Vst::ParameterInfo::kIsReadOnly | Vst::ParameterInfo::kIsHidden,
+                                static_cast<Vst::ParamID>(meter.id));
     }
     return kResultOk;
 }

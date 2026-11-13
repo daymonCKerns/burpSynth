@@ -47,17 +47,24 @@ double tongueFactor(double s, double centre, double height)
     return 1.0 - 0.9 * height * std::exp(-u * u);
 }
 
-// s_o = s_t + 0.4 if s_t < 0.6, else s_t - 0.45
-double roomCentre(double tongue)
-{
-    return tongue < 0.6 ? tongue + 0.4 : tongue - 0.45;
-}
-
-// room(s) = 1 + 0.6 h exp(-((s - s_o) / 0.15)^2)
-double roomFactor(double s, double centre, double height)
+// bump(s, c) = exp(-((s - c) / 0.15)^2)
+double roomBump(double s, double centre)
 {
     const double u = (s - centre) / 0.15;
-    return 1.0 + 0.6 * height * std::exp(-u * u);
+    return std::exp(-u * u);
+}
+
+// w = smoothstep((0.6 - s_t) / 0.15): 1 for s_t <= 0.45, 0 for s_t >= 0.6
+double frontRoomWeight(double tongue)
+{
+    return smoothstep((0.6 - tongue) / 0.15);
+}
+
+// room(s) = 1 + 0.6 h (w bump(s, s_t + 0.4) + (1 - w) bump(s, s_t - 0.45))
+double roomFactor(double s, double tongue, double height)
+{
+    const double w = frontRoomWeight(tongue);
+    return 1.0 + 0.6 * height * (w * roomBump(s, tongue + 0.4) + (1.0 - w) * roomBump(s, tongue - 0.45));
 }
 
 // area(s) = max(neutral * pharynx * jaw * tongue * room, 0.05 cm^2), inputs already clamped
@@ -67,7 +74,7 @@ double tractArea(double s, const MouthShape& shape)
     const double area = neutralArea(s) * pharynxFactor(s, shape.pharynxWidth)
                         * jawFactor(s, shape.jawOpening)
                         * tongueFactor(s, tongue, shape.tongueHeight)
-                        * roomFactor(s, roomCentre(tongue), shape.tongueHeight);
+                        * roomFactor(s, tongue, shape.tongueHeight);
     return std::max(area, kMinTractArea);
 }
 

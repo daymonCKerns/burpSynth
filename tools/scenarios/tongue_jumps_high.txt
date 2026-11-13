@@ -1,0 +1,10 @@
+# Issue: moving the tongue while sustaining clips. Worst case: tongue fully
+# high, position jumped (not ramped) back and forth during the sustain.
+0.0  set TongueHeight 1
+0.0  note_on 45 0.8
+1.0  set TonguePosition 0
+1.5  set TonguePosition 1
+2.0  set TonguePosition 0.3
+2.5  set TonguePosition 0.7
+3.0  note_off 45
+4.5  end

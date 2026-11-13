@@ -1,0 +1,17 @@
+# Issue: with these settings (docs/Params have high pitch pop on key release.png)
+# a release gives a sharp high-pitched ding, like a struck bell. Short press.
+0.0  set TonguePosition 0.75
+0.0  set TongueHeight 0.58
+0.0  set JawOpening 0.16
+0.0  set LipOpening 4.0
+0.0  set LesOpeningTime 50
+0.0  set LesOpeningArea 0.53
+0.0  set UesMass 1.86
+0.0  set UesDamping 0.157
+0.0  set Roughness 0.48
+0.0  set Breathiness 0.12
+0.0  set Velum 0.55
+0.0  set BurstLength 780
+0.0  note_on 45 0.8
+0.3  note_off 45
+1.5  end

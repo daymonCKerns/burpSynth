@@ -8,12 +8,11 @@
 //                 it; the last mouth section follows the lip area; pharynx
 //                 width only changes the pharynx.
 //   Peristalsis   Factor is 1 - depth at the centre and near 1 far away.
-//   TubeLaw       Collapsed fraction at zero pressure, 1 at and above the
-//                 opening pressure, monotonic in between.
 //   Reflex        After trigger: LES opens first, the UES opens only after
 //                 the pressure threshold or the fallback delay, the wave
 //                 runs once from 0 to 1, release closes both, and the
-//                 reflex ends idle. Reflex speed 2 halves the fixed times.
+//                 reflex ends idle. Reflex speed 2 halves the fixed times. A
+//                 wave cut by the release relaxes instead of vanishing.
 
 #include "Check.h"
 
@@ -22,7 +21,6 @@
 #include "model/geometry/AreaFunction.h"
 #include "model/geometry/Articulation.h"
 #include "model/geometry/Peristalsis.h"
-#include "model/geometry/TubeLaw.h"
 #include "model/math/Acoustics.h"
 #include "model/math/Units.h"
 
@@ -182,27 +180,6 @@ void testPeristalsis()
     BURP_CHECK(peristalsisFactor(0.5, 0.4, kPeristalsisWidth, 0.3) > 0.7);
 }
 
-void testTubeLaw()
-{
-    const double collapsed = 0.1;
-    BURP_CHECK_NEAR(tubeLawOpenFraction(0.0, kEsophagusOpeningPressure, collapsed), collapsed, 1e-12);
-    BURP_CHECK_NEAR(tubeLawOpenFraction(kEsophagusOpeningPressure, kEsophagusOpeningPressure,
-                                        collapsed),
-                    1.0, 1e-12);
-    BURP_CHECK_NEAR(tubeLawOpenFraction(4.0 * kEsophagusOpeningPressure, kEsophagusOpeningPressure,
-                                        collapsed),
-                    1.0, 1e-12);
-
-    double previous = tubeLawOpenFraction(-100.0, kEsophagusOpeningPressure, collapsed);
-    bool monotonic = true;
-    for (double p = -90.0; p <= 600.0; p += 10.0) {
-        const double fraction = tubeLawOpenFraction(p, kEsophagusOpeningPressure, collapsed);
-        monotonic = monotonic && fraction >= previous;
-        previous = fraction;
-    }
-    BURP_CHECK(monotonic);
-}
-
 // When each reflex event happened during one run (s, -1 = never).
 struct Timeline {
     double lesStart = -1.0;
@@ -309,6 +286,10 @@ void testReflex()
     printTimeline("pressure", pushed);
     BURP_CHECK_NEAR(pushed.uesStart, 0.03, kTimeTolerance);
     BURP_CHECK(pushed.lesStart < pushed.uesStart);
+    // The pressure never drains, so after the release the UES waits the 0.3 s
+    // maximum, then closes.
+    BURP_CHECK_NEAR(pushed.idle - 2.0, 0.3 + 0.08, 2.0 * kTimeTolerance);
+    BURP_CHECK(pushed.finalUes == 0.0);
 
     // Speed 2 halves every fixed time.
     const Timeline fast = runReflex(2.0, kNever, 2.0, 2.5);
@@ -320,11 +301,14 @@ void testReflex()
                     kTimeTolerance);
     BURP_CHECK_NEAR(fast.idle - 2.0, 0.5 * (slow.idle - 2.0), kTimeTolerance);
 
-    // Release during the wave cancels it and still ends idle.
+    // Release during the wave cancels it: the contraction relaxes over
+    // strength * 80 ms (not in one tick, which made a ringing click), and the
+    // reflex still ends idle.
     const Timeline cut = runReflex(1.0, kNever, 0.6, 1.5);
     printTimeline("release mid-wave", cut);
     BURP_CHECK(cut.waveCount == 1);
-    BURP_CHECK(cut.waveEnd > 0.6 && cut.waveEnd < 0.6 + kTimeTolerance);
+    const double relaxTime = ReflexSettings {}.peristalsisStrength * 0.1 * 0.8;
+    BURP_CHECK(cut.waveEnd > 0.6 + relaxTime - kTimeTolerance && cut.waveEnd < 0.6 + relaxTime + kTimeTolerance);
     BURP_CHECK(cut.idle > 0.6);
     BURP_CHECK(cut.finalLes == 0.0 && cut.finalUes == 0.0);
 
@@ -359,7 +343,6 @@ int main()
     testAnatomy();
     testArticulation();
     testPeristalsis();
-    testTubeLaw();
     testReflex();
     return burp::test::failures();
 }

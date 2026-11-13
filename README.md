@@ -99,7 +99,28 @@ The defaults are `burp.wav`, note 45, velocity 0.8 and a 1 second hold. It
 renders at 48 kHz: note on, hold, note off, then one more second for the tail.
 It prints the peak level and the file path.
 
+## Running scenarios
+`run_scenario` plays scripted scenarios (notes, parameter sets and ramps over
+time) through the engine and documents each one, for finding and comparing
+sound problems. The scenarios in `tools/scenarios/` reproduce the known issues.
+Building only this target does not reinstall the plugin:
+
+```sh
+cmake --build build/release --target run_scenario
+build/release/bin/Release/run_scenario tools/scenarios/*.txt
+```
+
+For each scenario it writes `<name>.wav`, `<name>_trace.csv` (output level and
+the model's pressures, flows and openings every 1 ms) and `<name>_summary.txt`
+(peak, samples in the soft clip, loudest windows, level around each note-off)
+to `build/renders/` (change with `-o <dir>`). The file format is described at
+the top of `tools/run_scenario.cpp`.
+
 ## Trying it
+Play it from a `release` build. A `debug` build has no optimisation and is far
+too slow for real time: it sounds jittery and crackly in a DAW. The plugin
+that was built last is the one copied to the VST3 folder.
+
 In a DAW rescan plugins, add BurpSynth to a MIDI track, and play notes.
 - A note starts a burp at that pitch. Hold it to keep the burp going; release
   it to end the burp.

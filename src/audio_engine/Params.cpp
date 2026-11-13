@@ -36,6 +36,8 @@ const std::array<ParamInfo, kParamCount>& paramTable()
         {ParamId::PitchSettle, "Pitch Settle", "ms", 0.0, 2000.0, 150.0},
         {ParamId::ReleaseTime, "Release Time", "ms", 30.0, 300.0, 80.0},
         {ParamId::AccentAmount, "Accent Amount", "mmHg", 0.0, 50.0, 15.0},
+        {ParamId::BurstLength, "Burst Length", "ms", 30.0, 2000.0, 400.0},
+        {ParamId::SustainStrength, "Sustain Strength", "", 0.0, 1.0, 0.5},
         {ParamId::BodySize, "Body Size", "x", 0.7, 1.3, 1.0},
         {ParamId::StomachStiffness, "Stomach Stiffness", "mmHg", 2.0, 30.0, 10.0},
         {ParamId::EsophagusLength, "Esophagus Length", "cm", 18.0, 30.0, 25.0},

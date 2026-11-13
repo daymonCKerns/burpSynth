@@ -6,14 +6,26 @@
 #include "model/math/Acoustics.h"
 #include "model/math/Flow.h"
 
+#include <cmath>
 #include <numbers>
 
 namespace burp {
 
 void Turbulence::prepare(double sampleRate)
 {
-    // One-pole lowpass at 300 Hz: tau = 1 / (2 pi f)
-    lowpass_.setTime(1.0 / (2.0 * std::numbers::pi * kHighpassHz), 1.0 / sampleRate);
+    // One-pole lowpasses: tau = 1 / (2 pi f)
+    const double dt = 1.0 / sampleRate;
+    const double upperTime = 1.0 / (2.0 * std::numbers::pi * kLowpassHz);
+    const double lowerTime = 1.0 / (2.0 * std::numbers::pi * kHighpassHz);
+    upper_.setTime(upperTime, dt);
+    lower_.setTime(lowerTime, dt);
+
+    // sigma^2 = V_hi + V_lo - 2 C  (Turbulence.h)
+    const double aHi = onePoleCoefficient(upperTime, dt);
+    const double aLo = onePoleCoefficient(lowerTime, dt);
+    const double variance = (1.0 - aHi) / (1.0 + aHi) + (1.0 - aLo) / (1.0 + aLo)
+                            - 2.0 * (1.0 - aHi) * (1.0 - aLo) / (1.0 - aHi * aLo);
+    scale_ = 1.0 / std::sqrt(variance);
     reset();
 }
 
@@ -24,7 +36,8 @@ void Turbulence::setGain(double gain)
 
 void Turbulence::reset()
 {
-    lowpass_.reset(0.0);
+    upper_.reset(0.0);
+    lower_.reset(0.0);
     normal_.reset();
 }
 
@@ -34,9 +47,9 @@ double Turbulence::pressure(double density, double viscosity, double flow, doubl
         return 0.0;
     }
 
-    // xi = white - lowpass(white): highpassed Gaussian noise
+    // xi = (lowpass_hi(white) - lowpass_lo(white)) / sigma: band-limited, unit variance
     const double white = normal_(engine_);
-    const double xi = white - lowpass_.next(white);
+    const double xi = scale_ * (upper_.next(white) - lower_.next(white));
 
     const double reynolds = reynoldsNumber(density, viscosity, flow, area);
     if (reynolds <= kCriticalReynolds) {

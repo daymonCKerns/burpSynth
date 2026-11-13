@@ -39,7 +39,7 @@ struct BurpControls {
     // Body: applied when a burp starts from idle.
     BodySettings body;
     double stomachElastance = mmHgToPa(10.0) / mlToM3(200.0); // Pa/m^3
-    double esophagusStiffness = 0.7;           // 0..1, 1 = rigid open pipe
+    double esophagusStiffness = 0.7;           // 0..1 wall stiffness, 1 = nominal tissue, 0 = floppy
 };
 
 } // namespace burp

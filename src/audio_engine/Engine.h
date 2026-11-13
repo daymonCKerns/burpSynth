@@ -5,7 +5,8 @@
 // model's output to the host's sample rate.
 //
 // Notes (monophonic, legato):
-//   noteOn, nothing held    -> BurpModel::trigger
+//   noteOn, nothing held    -> BurpModel::trigger, with the current parameter
+//                              values (not those of the last render)
 //   noteOn, a note is held  -> BurpModel::changeNote (glide + pressure accent)
 //   noteOff, others held    -> BurpModel::changeNote to the newest held note,
 //                              velocity 0 (no accent), if the sounding note changed
@@ -24,6 +25,7 @@
 // render() never allocates or locks. No VST3 types here.
 
 #include "audio_engine/Decimator.h"
+#include "audio_engine/Meters.h"
 #include "audio_engine/NoteStack.h"
 #include "audio_engine/Params.h"
 #include "model/BurpModel.h"
@@ -53,6 +55,13 @@ public:
     // Longer calls are rendered in chunks of maxBlockSize.
     void render(float* const* outputs, int numChannels, int numFrames);
 
+    // Read-only view of the model. Added for tools/run_scenario's trace.
+    const BurpModel& model() const;
+
+    // The display values in Meters.h, and resets the level peak. Real-time
+    // safe; the processor calls it once per block.
+    MeterValues takeMeters();
+
 private:
     // Steps 2 to 6 for at most maxBlockSize_ frames, written from
     // outputs[channel][offset].
@@ -67,6 +76,7 @@ private:
     std::vector<double> hostBuffer_;            // maxBlockSize_, host rate
     double hostSampleRate_ = 0.0;
     int maxBlockSize_ = 0;
+    double peak_ = 0.0; // output peak since the last takeMeters()
 };
 
 } // namespace burp

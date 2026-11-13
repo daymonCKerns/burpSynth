@@ -55,7 +55,8 @@ void testParams()
         ParamId::WallSoftness,      ParamId::PeristalsisStrength, ParamId::ReflexSpeed,
         ParamId::GasMix,            ParamId::OutputLevel,      ParamId::BendRange,
         ParamId::GlissandoRate,     ParamId::PitchSettle,      ParamId::ReleaseTime,
-        ParamId::AccentAmount,      ParamId::BodySize,         ParamId::StomachStiffness,
+        ParamId::AccentAmount,      ParamId::BurstLength,      ParamId::SustainStrength,
+        ParamId::BodySize,          ParamId::StomachStiffness,
         ParamId::EsophagusLength,   ParamId::EsophagusStiffness, ParamId::PharynxWidth,
     };
 
@@ -116,6 +117,8 @@ void testMapping()
     CHECK_FIELD(reflex.releaseTime);
     CHECK_FIELD(reflex.speed);
     CHECK_FIELD(reflex.peristalsisStrength);
+    CHECK_FIELD(reflex.burstTime);
+    CHECK_FIELD(reflex.sustainStrength);
     CHECK_FIELD(uesMassScale);
     CHECK_FIELD(uesDampingRatio);
     CHECK_FIELD(uesRestArea);

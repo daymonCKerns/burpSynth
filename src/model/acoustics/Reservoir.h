@@ -28,6 +28,9 @@ public:
     // Sets the gas amount from its volume at atmospheric pressure (m^3).
     void fill(double gasVolume);
 
+    // Adds gas, given as its volume at atmospheric pressure (m^3).
+    void addGas(double gasVolume);
+
     // Empties the stomach.
     void reset();
 

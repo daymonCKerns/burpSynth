@@ -103,6 +103,15 @@ m y'' + r y' + k y = P,   wall flow = scale * S * y',   S = 2 sqrt(pi A) dx
 ```
 
 `scale` comes from the Wall Softness parameter (0 = rigid, 0.5 = nominal).
+The esophagus wall's `k` is also scaled by Esophagus Stiffness (see
+section 6). This is how the esophagus gives way to gas: the wall runs every
+sample, so it stays in step with the pressure.
+
+Tube shapes must never be driven by pressure at control rate. An earlier
+version set the esophagus area from its averaged pressure every 1 ms (a tube
+law). Area changes move pressure by about rho c^2 dA / A, so that loop had a
+gain near 100 and a delay of several ms: it flipped every tick and pumped
+the gas at 500 Hz without end.
 
 ### 3.5 Per-sample order (`BurpModel::render`)
 
@@ -124,9 +133,12 @@ m y'' + r y' + k y = P,   wall flow = scale * S * y',   S = 2 sqrt(pi A) dx
 5. Valve targets: LES area = reflex.lesOpen * LES opening area; velum area.
 6. Tension Q from `PitchControl`, perturbed by roughness, into the UES with
    the reflex's `uesOpen`.
-7. Shapes: `articulate()` for pharynx and mouth; esophagus = rest area *
-   tube law (averaged pressure) * peristalsis factor. Tubes ramp to the new
-   shapes over one control interval.
+7. Shapes: `articulate()` for pharynx and mouth; esophagus = open area *
+   peristalsis factor. Tubes ramp to the new shapes over one control
+   interval. Pharynx and mouth areas are slew-limited to
+   max(2.5% of the area, 0.05 cm^2) per ms: a faster change squeezes the gas
+   in the cells into a pressure pulse (a tongue jump made +14 dB clicks).
+   Esophagus wall stiffness from Esophagus Stiffness.
 8. Refresh each connector's neighbour inertance and the lip opening.
 
 Body parameters (lengths, gas mix) are applied only when a burp starts from
@@ -141,7 +153,7 @@ idle, because they re-grid the tubes.
 | Esophagus, pharynx, mouth, nasal | `Tube` | Chain of cells and links, moving and yielding walls |
 | UES | `Sphincter` | Two coupled masses (Steinecke & Herzel 1995) with collision; tension factor Q sets pitch |
 | Lips, nostrils | `Radiation` | Parallel R-L load (Flanagan); its dU/dt is the output |
-| Jet noise | `Turbulence` | Noise pressure scaled by dynamic pressure above a critical Reynolds number |
+| Jet noise | `Turbulence` | Noise pressure scaled by dynamic pressure above a critical Reynolds number. The noise is band-limited to 300 Hz–2 kHz (one-pole slopes) and normalised to unit variance |
 
 Why two masses in the UES: a single mass driven by Bernoulli pressure cannot
 feed energy into its own motion without help from the tube. The phase lag
@@ -161,16 +173,22 @@ is equivalent to dividing the driving pressure, so it is the main tuning knob.
 | Belch 1 | note-on | LES opens over the LES opening time |
 | Belch 2 | averaged pressure under the UES passes 300 Pa, or 120 ms after Belch 1 | UES releases over 30 ms |
 | Belch 3 | 250 ms after Belch 2 | One contraction wave travels up the esophagus in 800 ms |
-| Hold | | Stays open until note-off or the gas runs out |
-| Release | note-off | LES closes in 20 ms, UES closes over the release time |
-| Idle | release done | Model sleeps after a 0.5 s tail; a safety fade guarantees silence |
+| Burst | Burst Length after Belch 2 | The first impulse ends. With Sustain Strength s > 0 the LES settles over 200 ms to 0.5 s of full opening and the UES stays open; with s = 0 it closes as on release (the tail) |
+| Bubble | while sustained, about lerp(1, 6 Hz, s) | The LES opening swells by 30% for 60 ms (raised cosine); gaps jitter by ±50% |
+| Release | note-off | LES closes in 20 ms. The UES holds open until the averaged pressure under it drops below 100 Pa (at most 300 ms), then closes over the release time. Closing on a full esophagus makes the trapped gas pop it open repeatedly (harsh clicks). A Belch 3 wave still running relaxes where it is (its depth falls at the rate of the wave's own fade, at most 80 ms) instead of vanishing: vanishing let the esophagus spring open in 1 ms, and the pulse rang the tract like a bell |
+| Idle | release done | Model sleeps after 30 ms of output below 1e-3 Pa (at most 0.5 s), with a 20 ms safety fade. Ending on quiet stops gas under the shut UES from popping it long after the tail |
+
+While sustained, BurpModel refills the stomach toward the note's first fill
+(time constant 100 ms) so the flow stays steady. Not physical; musical.
 
 All times are divided by Reflex Speed.
 
 ### 5.2 Notes (`Engine` + `NoteStack`)
 
-- Note-on with no held notes: `BurpModel::trigger`. Velocity scales the gas
-  amount (30% to 100% of Gas Amount).
+- Note-on with no held notes: `BurpModel::trigger`, after handing the model
+  the current parameter values (parameters set earlier in the same block
+  apply from the note's first sample). Velocity scales the gas amount (30% to
+  100% of Gas Amount).
 - Note-on while a note is held: `BurpModel::changeNote`. The pitch glides and
   the velocity adds a pressure accent (velocity * Accent Amount, decaying with
   a 150 ms time constant).
@@ -225,6 +243,8 @@ what the host displays.
 | 25 | Pitch Settle | ms | 0 | 2000 | 150 |
 | 26 | Release Time | ms | 30 | 300 | 80 |
 | 27 | Accent Amount | mmHg | 0 | 50 | 15 |
+| 28 | Burst Length | ms | 30 | 2000 | 400 |
+| 29 | Sustain Strength | | 0 | 1 | 0.5 |
 | 40 | Body Size | x | 0.7 | 1.3 | 1 |
 | 41 | Stomach Stiffness | mmHg | 2 | 30 | 10 |
 | 42 | Esophagus Length | cm | 18 | 30 | 25 |
@@ -236,8 +256,15 @@ Notes:
   the resulting damping constant, as in Steinecke & Herzel.
 - Stomach Stiffness is the wall pressure at 200 mL of gas.
 - Gas Mix runs from air (0) to carbon dioxide (1).
-- Esophagus Stiffness 1 is a rigid open pipe; lower values let it collapse.
+- Esophagus Stiffness sets the esophagus wall stiffness:
+  0.05^(1 - value) x nominal tissue, so 1 = nominal and 0 = 20x floppier.
 - Pitch Settle at its maximum means "always correcting".
+- Burst Length is how long the first impulse keeps the LES fully open.
+- Sustain Strength sets what a held note does after the burst: the steady
+  LES opening (0.5 x s), the bubble rate (lerp(1, 6 Hz, s)) and, through the
+  refill, a stomach kept full. 0 = no sustain: the burst and its tail.
+- Stomach Stiffness applies live (every control tick). Gas Amount, Body Size,
+  Esophagus Length and Gas Mix apply when a burp starts from idle.
 - MIDI: the mod wheel maps to Abdominal Pressure and the pitch wheel to
   Pitch Bend (VST3 delivers both as parameter changes).
 
@@ -251,11 +278,11 @@ frozen; private members are the implementer's choice.
 | 1 Math | `src/model/math/{Gas,Acoustics,Flow,Integrate,Smooth}.h`, `tests/Spectrum.h`, `tests/test_math.cpp` |
 | 2 Acoustics | `src/model/acoustics/{Cell,Link}.h`, `{Tube,Reservoir,Valve,Radiation,Turbulence}.{h,cpp}`, `tests/test_tube.cpp`, `tests/test_reservoir.cpp` |
 | 3 Source | `src/model/acoustics/Sphincter.{h,cpp}`, `src/model/control/PitchControl.{h,cpp}`, `tests/test_sphincter.cpp` |
-| 4 Geometry and reflex | `src/model/geometry/{AreaFunction,Peristalsis,TubeLaw}.h`, `{Anatomy,Articulation}.{h,cpp}`, `src/model/control/Reflex.{h,cpp}`, `tests/test_geometry.cpp` |
+| 4 Geometry and reflex | `src/model/geometry/{AreaFunction,Peristalsis}.h`, `{Anatomy,Articulation}.{h,cpp}`, `src/model/control/Reflex.{h,cpp}`, `tests/test_geometry.cpp` |
 | 5 Model | `src/model/BurpModel.{h,cpp}`, `tests/test_model.cpp`, `tools/WavWriter.h`, `tools/render_wav.cpp` |
 | 6 Engine | `src/audio_engine/{Params,Decimator,ControlMapping,Engine}.{h,cpp}`, `NoteStack.h`, `tests/test_engine.cpp` |
 | 7 Plugin and build | `src/plugin/PluginProcessor.{h,cpp}`, `PluginController.{h,cpp}`, every `CMakeLists.txt` except `src/gui`, `readme.md` |
-| 8 Editor | `src/gui/Editor.{h,cpp}`, `src/gui/CMakeLists.txt` |
+| 8 Editor | `src/gui/Editor.{h,cpp}`, `src/gui/BodyView.{h,cpp}` (body cross-section: live parameters as shapes, gas bubbles moving at the measured flows, scaled down), `src/audio_engine/Meters.h` (display values the processor sends as read-only output parameters), `src/gui/CMakeLists.txt` |
 
 Shared files already complete: `src/model/math/Units.h`, `src/model/BurpControls.h`,
 `tests/Check.h`.
@@ -285,3 +312,10 @@ measured and returns the number of failed checks.
   the resting gap are tuned with `test_sphincter`.
 - The engine soft-clips its output and resets the model if a sample is not
   finite, so a blown-up simulation cannot reach the speakers at full scale.
+
+## Notes from end of 11/11 6pm session
+  - Sustain wiht bubbles is wierd look into it or just let sustain be based on paramaters
+  so changing paramaters during release can lead to a sustain effect.
+  - Still alot of work to figure out which paramaters should make it the UI and how
+  to have different changing paramaters interact witheachother in a true to 
+  burp manner.
